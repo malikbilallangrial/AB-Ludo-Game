@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>A+B Ludo Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Ludo Board Grid Setup */
+        .ludo-board {
+            display: grid;
+            /* 15x15 Grid setup */
+            grid-template-columns: repeat(15, 1fr);
+            grid-template-rows: repeat(15, 1fr);
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1 / 1; /* Keep it square */
+            border: 8px solid #374151; /* Dark border */
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+            margin: 0 auto;
+        }
+
+        /* Base Area (6x6 cells) */
+        .base-cell {
+            border: 1px solid #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* Home Box (Starting Area for tokens inside Base) */
+        .home-box {
+            width: 70%;
+            height: 70%;
+            border-radius: 8px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 5px;
+            padding: 5px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Token holder inside Home Box */
+        .token-holder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+        }
+
+        /* Track Cell (1x1 size) */
+        .track-cell {
+            border: 1px solid #4b5563;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        /* Central Home */
+        .center-home {
+            grid-area: 7 / 7 / span 3 / span 3;
+            background: linear-gradient(45deg, #ef4444, #f59e0b, #10b981, #3b82f6);
+            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            border: none;
+            z-index: 10;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            color: white;
+            font-size: 1rem;
+            font-weight: bold;
+            transform: rotate(45deg); 
+            padding: 5px;
+        }
+        
+        /* Token Style */
+        .token {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid white;
+            /* FIX: Removed position: absolute; from base style. */
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+            cursor: pointer;
+            z-index: 20; 
+            /* Added transition for smooth step-by-step movement */
+            transition: all 0.15s ease-in-out; 
+        }
+        
+        /* Tokens on track/home column/center should be static */
+        .track-cell .token, 
+        .token-holder .token, /* Tokens in base holder */
+        .center-home .token {
+            position: static;
+            margin: 0; /* Tokens in home/base should not have margin */
+        }
+        
+        .center-home .token {
+            margin: 2px;
+        }
+
+        .token.highlight {
+            animation: pulse-ring 1s infinite;
+            border: 4px solid #fcd34d; /* Yellow ring for movable token */
+        }
+        
+        @keyframes pulse-ring {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(252, 211, 77, 0.7); }
+            70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(252, 211, 77, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(252, 211, 77, 0); }
+        }
+
+        /* Ludo Specific Cell Coloring and Layout */
+        /* Red Base */
+        .grid-cell-red-base { grid-area: 1 / 1 / span 6 / span 6; background-color: #fca5a5; }
+        /* Blue Base */
+        .grid-cell-blue-base { grid-area: 1 / 10 / span 6 / span 6; background-color: #93c5fd; }
+        /* Green Base */
+        .grid-cell-green-base { grid-area: 10 / 10 / span 6 / span 6; background-color: #a7f3d0; }
+        /* Yellow Base */
+        .grid-cell-yellow-base { grid-area: 10 / 1 / span 6 / span 6; background-color: #fde68a; }
+
+        /* Home Columns (Safety zone background) */
+        .red-home-col { background-color: #fee2e2; }
+        .blue-home-col { background-color: #eff6ff; }
+        .yellow-home-col { background-color: #fffbeb; }
+        .green-home-col { background-color: #ecfdf5; }
+
+        /* Safe Spots (Stars) */
+        .safe-spot {
+            position: relative;
+            background-color: #000 !important; /* Overwrite color for contrast */
+        }
+        .safe-spot::after {
+            content: '⭐';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem;
+            z-index: 1;
+        }
+
+        /* Dice Styles */
+        #dice-roller {
+            width: 70px;
+            height: 70px;
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+            border: 4px solid #10b981;
+        }
+
+        /* Sticky Ad Bar */
+        .sticky-ad {
+          position: fixed;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          z-index: 9999;
+          background: #fff;
+          text-align: center;
+          box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+          padding: 6px 0;
+        }
+
+        /* Small responsive tweak for ad containers so they don't overflow on tiny screens */
+        .ad-container {
+          display:inline-block;
+          max-width:100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 font-sans">
+
+    <div class="flex justify-center mb-4 ad-container" aria-hidden="true">
+        <script type="text/javascript">
+            atOptions = {
+                'key' : 'dc9969553a5692a4fb7a1fb42b1398fa',
+                'format' : 'iframe',
+                'height' : 50,
+                'width' : 320,
+                'params' : {}
+            };
+        </script>
+        <script type="text/javascript" src="//www.highperformanceformat.com/dc9969553a5692a4fb7a1fb42b1398fa/invoke.js"></script>
+    </div>
+
+    <div id="app" class="max-w-4xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-center text-gray-800 mb-6">
+            🎲 Full Ludo Game
+        </h1>
+
+        <div class="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl shadow-lg mb-8">
+            <div id="status-message" class="text-lg font-semibold text-gray-700 mb-4 md:mb-0 w-full md:w-2/3 text-center md:text-left">
+                Game started! Red player's turn. Roll the dice.
+            </div>
+            <div class="flex items-center space-x-4">
+                <div id="dice-roller" class="select-none">?</div>
+                <button 
+                    id="roll-button" 
+                    class="px-6 py-3 bg-indigo-600 text-white font-bold rounded-full shadow-lg hover:bg-indigo-700 transition duration-150 active:scale-95 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                    Roll Dice
+                </button>
+                <button 
+                    id="new-game-button" 
+                    class="px-4 py-3 bg-green-500 text-white font-bold rounded-full shadow-lg hover:bg-green-600 transition duration-150 active:scale-95 hidden"
+                >
+                    New Game
+                </button>
+            </div>
+        </div>
+
+        <div class="ludo-board">
+            <div class="center-home">HOME</div>
+        </div>
+
+        <div class="flex justify-center mt-6 mb-6 ad-container" aria-hidden="true">
+            <script type="text/javascript">
+                atOptions = {
+                    'key' : 'dc9969553a5692a4fb7a1fb42b1398fa',
+                    'format' : 'iframe',
+                    'height' : 50,
+                    'width' : 320,
+                    'params' : {}
+                };
+            </script>
+            <script type="text/javascript" src="//www.highperformanceformat.com/dc9969553a5692a4fb7a1fb42b1398fa/invoke.js"></script>
+        </div>
+
+        <div class="mt-12 pt-4 border-t border-gray-300 text-center text-sm text-gray-600">
+            <p class="font-semibold mb-1 text-gray-800">Developed by:</p>
+            <p class="text-lg font-bold text-indigo-600">Malik Bilal Langrial & Asad Akram</p>
+            <p class="text-xs mt-1 text-gray-500">Built with 🎲 Android Studio</p>
+        </div>
+        
+    </div>
+
+    <div class="sticky-ad ad-container" aria-hidden="true">
+        <script type="text/javascript">
+            atOptions = {
+                'key' : 'dc9969553a5692a4fb7a1fb42b1398fa',
+                'format' : 'iframe',
+                'height' : 50,
+                'width' : 320,
+                'params' : {}
+            };
+        </script>
+        <script type="text/javascript" src="//www.highperformanceformat.com/dc9969553a5692a4fb7a1fb42b1398fa/invoke.js"></script>
+    </div>
+
+    <script>
+        // Ludo Game Logic in JavaScript
+
+        // -----------------------------------------------------
+        // 1. GAME CONFIGURATION
+        // -----------------------------------------------------
+
+        const NUM_TOKENS = 4;
+        const ANIMATION_DELAY_MS = 150; // Delay for step-by-step movement
+
+        // Player configurations
+        const PLAYERS = {
+            RED: { id: 0, color: 'Red', name: 'Red', hex: '#ef4444', start: 0, safeEnter: 51, homeStart: 52 },
+            BLUE: { id: 1, color: 'Blue', name: 'Blue', hex: '#3b82f6', start: 13, safeEnter: 12, homeStart: 58 },
+            YELLOW: { id: 2, color: 'Yellow', name: 'Yellow', hex: '#f59e0b', start: 26, safeEnter: 25, homeStart: 64 },
+            GREEN: { id: 3, color: 'Green', name: 'Green', hex: '#10b981', start: 39, safeEnter: 38, homeStart: 70 },
+        };
+        const PLAYER_COLORS = ['RED', 'BLUE', 'YELLOW', 'GREEN'];
+        
+        // Mapped cell numbers to actual Ludo board track
+        const TRACK_MAP = [
+            // Main Track (0-51)
+            { grid: '7/2', isSafe: true, color: 'RED', isStart: true }, // 0: Red Start (Implicitly safe)
+            { grid: '7/3', isSafe: false }, 
+            { grid: '7/4', isSafe: false }, 
+            { grid: '7/5', isSafe: false }, 
+            { grid: '7/6', isSafe: false }, // 4
+            { grid: '6/7', isSafe: true }, // 5: Safe Spot (Star)
+            { grid: '5/7', isSafe: false }, 
+            { grid: '4/7', isSafe: false }, 
+            { grid: '3/7', isSafe: false }, 
+            { grid: '2/7', isSafe: false }, 
+            { grid: '1/7', isSafe: false }, // 10
+            { grid: '1/8', isSafe: true }, // 11: Safe Spot (Star)
+            { grid: '1/9', isSafe: false, color: 'BLUE' }, // 12: Blue Safe Enter 
+            { grid: '2/9', isSafe: true, color: 'BLUE', isStart: true }, // 13: Blue Start (Implicitly safe)
+            { grid: '3/9', isSafe: false }, 
+            { grid: '4/9', isSafe: false }, 
+            { grid: '5/9', isSafe: false }, 
+            { grid: '6/9', isSafe: false }, // 17
+            { grid: '7/10', isSafe: true }, // 18: Safe Spot (Star)
+            { grid: '7/11', isSafe: false }, 
+            { grid: '7/12', isSafe: false }, 
+            { grid: '7/13', isSafe: false }, 
+            { grid: '7/14', isSafe: false }, 
+            { grid: '7/15', isSafe: false }, // 23
+            { grid: '8/15', isSafe: true }, // 24: Safe Spot (Star)
+            { grid: '9/15', isSafe: false, color: 'YELLOW' }, // 25: Yellow Safe Enter
+            { grid: '9/14', isSafe: true, color: 'YELLOW', isStart: true }, // 26: Yellow Start (Implicitly safe)
+            { grid: '9/13', isSafe: false }, 
+            { grid: '9/12', isSafe: false }, 
+            { grid: '9/11', isSafe: false }, 
+            { grid: '9/10', isSafe: false }, // 30
+            { grid: '10/9', isSafe: true }, // 31: Safe Spot (Star)
+            { grid: '11/9', isSafe: false }, 
+            { grid: '12/9', isSafe: false }, 
+            { grid: '13/9', isSafe: false }, 
+            { grid: '14/9', isSafe: false }, 
+            { grid: '15/9', isSafe: false }, // 36
+            { grid: '15/8', isSafe: true }, // 37: Safe Spot (Star)
+            { grid: '15/7', isSafe: false, color: 'GREEN' }, // 38: Green Safe Enter
+            { grid: '14/7', isSafe: true, color: 'GREEN', isStart: true }, // 39: Green Start (Implicitly safe)
+            { grid: '13/7', isSafe: false }, 
+            { grid: '12/7', isSafe: false }, 
+            { grid: '11/7', isSafe: false }, 
+            { grid: '10/7', isSafe: false }, // 43
+            { grid: '9/6', isSafe: true }, // 44: Safe Spot (Star)
+            { grid: '9/5', isSafe: false }, 
+            { grid: '9/4', isSafe: false }, 
+            { grid: '9/3', isSafe: false }, 
+            { grid: '9/2', isSafe: false }, 
+            { grid: '9/1', isSafe: false }, // 49
+            { grid: '8/1', isSafe: true }, // 50: Safe Spot (Star)
+            { grid: '8/2', isSafe: false, color: 'RED' }, // 51: Red Safe Enter
+            
+            // Home Columns (52-75) - These are always safe
+            { grid: '8/3', isSafe: true, homeCol: 'red' }, // 52: Red Home Column 1
+            { grid: '8/4', isSafe: true, homeCol: 'red' }, // 53
+            { grid: '8/5', isSafe: true, homeCol: 'red' }, // 54
+            { grid: '8/6', isSafe: true, homeCol: 'red' }, // 55
+            { grid: '8/7', isSafe: true, homeCol: 'red' }, // 56
+            { grid: '8/8', isSafe: true, homeCol: 'red' }, // 57: Red Home Column 6 (Center Entry)
+            { grid: '3/8', isSafe: true, homeCol: 'blue' }, // 58: Blue Home Column 1
+            { grid: '4/8', isSafe: true, homeCol: 'blue' }, // 59
+            { grid: '5/8', isSafe: true, homeCol: 'blue' }, // 60
+            { grid: '6/8', isSafe: true, homeCol: 'blue' }, // 61
+            { grid: '7/8', isSafe: true, homeCol: 'blue' }, // 62
+            { grid: '8/8', isSafe: true, homeCol: 'blue' }, // 63: Blue Home Column 6 (Center Entry)
+            { grid: '13/8', isSafe: true, homeCol: 'yellow' }, // 64: Yellow Home Column 1
+            { grid: '12/8', isSafe: true, homeCol: 'yellow' }, // 65
+            { grid: '11/8', isSafe: true, homeCol: 'yellow' }, // 66
+            { grid: '10/8', isSafe: true, homeCol: 'yellow' }, // 67
+            { grid: '9/8', isSafe: true, homeCol: 'yellow' }, // 68
+            { grid: '8/8', isSafe: true, homeCol: 'yellow' }, // 69: Yellow Home Column 6 (Center Entry)
+            { grid: '8/13', isSafe: true, homeCol: 'green' }, // 70: Green Home Column 1
+            { grid: '8/12', isSafe: true, homeCol: 'green' }, // 71
+            { grid: '8/11', isSafe: true, homeCol: 'green' }, // 72
+            { grid: '8/10', isSafe: true, homeCol: 'green' }, // 73
+            { grid: '8/9', isSafe: true, homeCol: 'green' }, // 74
+            { grid: '8/8', isSafe: true, homeCol: 'green' }, // 75: Green Home Column 6 (Center Entry)
+        ];
+
+        // -----------------------------------------------------
+        // 2. GAME STATE
+        // -----------------------------------------------------
+
+        let gameState;
+        
+        const initialState = () => ({
+            positions: {
+                // -1: Base, 0-51: Global Track Index, 52-75: Home Column, 76: Center
+                RED: Array(NUM_TOKENS).fill(-1), 
+                BLUE: Array(NUM_TOKENS).fill(-1),
+                YELLOW: Array(NUM_TOKENS).fill(-1),
+                GREEN: Array(NUM_TOKENS).fill(-1),
+            },
+            playerTurn: 'RED',
+            diceValue: 0,
+            movableTokens: [],
+            status: 'Playing', // 'Playing', 'RED Wins', etc.
+            playerOrder: PLAYER_COLORS,
+            currentPlayerIndex: 0,
+            hasRolled: false,
+            isRolling: false,
+            isMoving: false, // State for sequential movement
+        });
+
+        // -----------------------------------------------------
+        // 3. UTILITY FUNCTIONS
+        // -----------------------------------------------------
+
+        function getPlayerObject(color) {
+            return PLAYERS[color];
+        }
+
+        function rollDice() {
+            return Math.floor(Math.random() * 6) + 1;
+        }
+
+        // Checks if a cell is a safe spot (star or start cell) on the main track (0-51)
+        function isSafeCell(globalTrackPosition) {
+            if (globalTrackPosition < 0 || globalTrackPosition > 51) return false;
+            
+            const cell = TRACK_MAP[globalTrackPosition];
+            return cell && cell.isSafe; 
+        }
+
+        /**
+         * Calculates the next single step position from the current position.
+         * Handles main track wrap and transition into the Home Column.
+         */
+        function getNextTrackPosition(currentPos, playerConfig) {
+            const totalSteps = 52;
+            const homeColStart = playerConfig.homeStart;
+            const safeEnterGlobal = playerConfig.safeEnter;
+
+            // 1. Check if moving from main track into Home Column
+            if (currentPos === safeEnterGlobal) {
+                return homeColStart; // Enters the first cell of the Home Column (e.g., 52 for Red)
+            } 
+            
+            // 2. Check if moving within Home Column (52-75)
+            // Note: Home Columns are 6 steps, 52 to 57 for Red. Center is 76.
+            else if (currentPos >= homeColStart && currentPos < homeColStart + 5) {
+                return currentPos + 1; // Moves one step closer to the center
+            } 
+            
+            // 3. Check if moving from the last Home Column cell to Center (76)
+            else if (currentPos === homeColStart + 5) {
+                return 76; // Center position
+            }
+            
+            // 4. Main Track movement (0-51)
+            else if (currentPos >= 0 && currentPos <= 51) {
+                const nextPos = (currentPos + 1) % totalSteps;
+                
+                // Check if the next step is the player's safe enter point
+                if (nextPos === safeEnterGlobal) {
+                    return homeColStart;
+                }
+
+                // Regular move on the main track
+                return nextPos;
+            }
+
+            // Should not happen for tokens already in Base (-1) or Center (76)
+            return -2; 
+        }
+
+        /**
+         * FIX: Ensured the token element is retrieved and appended correctly to its new parent.
+         * It must exist before calling this function.
+         */
+        function moveTokenToVisualCell(playerColor, tokenIndex, pos) {
+            const tokenElement = document.getElementById(`${playerColor.toLowerCase()}-token-${tokenIndex}`);
+            if (!tokenElement) return;
+
+            // 1. Get the current parent and remove the token from it
+            const currentParent = tokenElement.parentElement;
+            if (currentParent) {
+                currentParent.removeChild(tokenElement);
+            }
+
+            // 2. Place token based on new position
+            let newParent = null;
+
+            if (pos === -1) {
+                // Place in Base Holder
+                newParent = document.getElementById(`${playerColor.toLowerCase()}-holder-${tokenIndex}`);
+            } else if (pos === 76) {
+                // Place in Center Home
+                newParent = document.querySelector('.center-home');
+            } else if (pos >= 0) {
+                // Place on Track Cell
+                newParent = document.getElementById(`track-cell-${pos}`);
+            }
+
+            if (newParent) {
+                newParent.appendChild(tokenElement);
+            }
+        }
+        
+        // -----------------------------------------------------
+        // 4. GAME FLOW & LOGIC
+        // -----------------------------------------------------
+
+        function checkMovableTokens() {
+            const playerColor = gameState.playerTurn;
+            const positions = gameState.positions[playerColor];
+            const dice = gameState.diceValue;
+            let movable = [];
+            const playerConfig = getPlayerObject(playerColor);
+            const homeColEnd = playerConfig.homeStart + 5; 
+            const centerPos = 76; 
+
+            positions.forEach((currentPos, tokenIndex) => {
+                let canMove = false;
+                let potentialNewPos = -2;
+
+                if (currentPos === -1) {
+                    // Token in Base: Can only move out with a 6
+                    if (dice === 6) {
+                        canMove = true;
+                        potentialNewPos = playerConfig.start;
+                    }
+                } else if (currentPos >= 0 && currentPos <= 75) {
+                    // Token on Track or Home Column (0-75)
+                    let simulatedPos = currentPos;
+                    let validMove = true;
+                    
+                    for (let step = 0; step < dice; step++) {
+                        simulatedPos = getNextTrackPosition(simulatedPos, playerConfig);
+
+                        if (simulatedPos === -2 || simulatedPos > centerPos) { 
+                            // Over-shot the center (or invalid position)
+                            validMove = false;
+                            break;
+                        }
+                    }
+
+                    if (validMove) {
+                        canMove = true;
+                        potentialNewPos = simulatedPos;
+                    }
+                }
+
+                if (canMove) {
+                    movable.push({ tokenIndex, newPos: potentialNewPos });
+                }
+            });
+
+            return movable;
+        }
+
+        function handleTokenMove(tokenIndex) {
+            if (gameState.status !== 'Playing' || gameState.diceValue === 0 || gameState.isMoving) return;
+
+            const playerColor = gameState.playerTurn;
+            const movable = gameState.movableTokens.find(m => m.tokenIndex === tokenIndex);
+
+            if (!movable) {
+                updateMessage(`You cannot move this token.`, 'error');
+                return;
+            }
+
+            const finalPos = movable.newPos;
+            const currentPos = gameState.positions[playerColor][tokenIndex];
+            const steps = gameState.diceValue;
+
+            // Block further moves and rolling
+            gameState.isMoving = true; 
+            gameState.movableTokens = []; // Clear highlights
+
+            document.getElementById('roll-button').disabled = true;
+
+            // Start animation and post-move logic
+            animateTokenMovement(tokenIndex, currentPos, steps, playerColor, finalPos);
+
+            renderBoard(); // Clear existing highlights
+        }
+
+        /**
+         * Asynchronously moves the token step-by-step and handles post-move logic.
+         */
+        async function animateTokenMovement(tokenIndex, startPos, steps, playerColor, finalPos) {
+            const playerConfig = getPlayerObject(playerColor);
+            let currentPos = startPos;
+            
+            // FIX: Correctly handle the first step out of the base immediately
+            if (currentPos === -1 && steps > 0) {
+                // Must be a 6 move, so we move to the player's start position (e.g. 0 for Red)
+                currentPos = playerConfig.start;
+                moveTokenToVisualCell(playerColor, tokenIndex, currentPos);
+                await new Promise(r => setTimeout(r, ANIMATION_DELAY_MS));
+                steps--; // One step consumed by moving out of base
+            }
+
+            // Loop for remaining steps
+            for (let i = 0; i < steps; i++) {
+                currentPos = getNextTrackPosition(currentPos, playerConfig);
+                moveTokenToVisualCell(playerColor, tokenIndex, currentPos);
+                await new Promise(r => setTimeout(r, ANIMATION_DELAY_MS));
+            }
+            
+            // *** POST-MOVE GAME LOGIC ***
+            
+            const centerPos = 76; 
+            let killedOpponent = false; 
+            const dice = gameState.diceValue; // Preserve dice value for extra turn check
+            
+            // 1. Update the actual game state position
+            gameState.positions[playerColor][tokenIndex] = finalPos;
+
+            // 2. Check for killing (only if landing on main track 0-51)
+            if (finalPos >= 0 && finalPos <= 51) {
+                if (!isSafeCell(finalPos)) {
+                    // Check all other players' tokens
+                    PLAYER_COLORS.filter(c => c !== playerColor).forEach(opponentColor => {
+                        const opponentPositions = gameState.positions[opponentColor];
+
+                        opponentPositions.forEach((oppPos, oppIndex) => {
+                            if (oppPos === finalPos) {
+                                // Kill the opponent token!
+                                gameState.positions[opponentColor][oppIndex] = -1; // Send back to base
+                                updateMessage(`${getPlayerObject(playerColor).name} killed ${getPlayerObject(opponentColor).name}'s token! 🗡️`, 'kill');
+                                killedOpponent = true;
+                            }
+                        });
+                    });
+                }
+            }
+            
+            // 3. Check for Win Condition
+            const centerCount = gameState.positions[playerColor].filter(pos => pos === centerPos).length;
+            if (centerCount === NUM_TOKENS) {
+                gameState.status = `${playerColor} Wins`;
+                updateMessage(`${getPlayerObject(playerColor).name} won! 🎉`, 'win');
+                document.getElementById('new-game-button').classList.remove('hidden');
+                renderBoard();
+                gameState.isMoving = false;
+                document.getElementById('roll-button').disabled = true;
+                return;
+            }
+            
+            // After all moves and checks are complete, re-render the board once to reflect final state (e.g., killed tokens back in base)
+            renderBoard();
+
+            // 4. Determine Next Turn (Extra turn on 6 or Kill)
+            gameState.diceValue = 0; // Dice value is fully consumed
+
+            if (dice === 6 || killedOpponent) {
+                let message;
+                if (dice === 6 && killedOpponent) {
+                    message = `${getPlayerObject(playerColor).name} rolled a 6 AND killed! Extra turn.`;
+                } else if (dice === 6) {
+                    message = `${getPlayerObject(playerColor).name} rolled a 6! Extra turn.`;
+                } else { 
+                    message = `${getPlayerObject(playerColor).name} killed! Extra turn.`;
+                }
+                updateMessage(message, 'turn');
+                gameState.hasRolled = false; // Allow rolling again
+
+            } else {
+                switchPlayerTurn();
+                updateMessage(`Turn ended. Now ${getPlayerObject(gameState.playerTurn).name}. Roll the dice.`, 'turn');
+                gameState.hasRolled = false;
+            }
+            
+            // Cleanup and Re-render (Final render to ensure correct highlights/state)
+            gameState.isMoving = false;
+            document.getElementById('roll-button').disabled = false;
+            renderBoard();
+        }
+
+        function switchPlayerTurn() {
+            let nextIndex = (gameState.currentPlayerIndex + 1) % PLAYER_COLORS.length;
+            let nextPlayerColor = PLAYER_COLORS[nextIndex];
+            
+            gameState.currentPlayerIndex = nextIndex;
+            gameState.playerTurn = nextPlayerColor;
+        }
+
+        function handleRoll() {
+            if (gameState.status !== 'Playing' || gameState.hasRolled || gameState.isRolling || gameState.isMoving) return;
+
+            gameState.isRolling = true;
+            document.getElementById('roll-button').disabled = true;
+            updateMessage(`Rolling dice...`, 'info');
+
+            // Simulate roll animation
+            let rollCount = 0;
+            const interval = setInterval(() => {
+                const tempRoll = rollDice();
+                document.getElementById('dice-roller').textContent = tempRoll;
+                rollCount++;
+                if (rollCount > 10) {
+                    clearInterval(interval);
+                    
+                    const finalRoll = rollDice();
+                    gameState.diceValue = finalRoll;
+                    gameState.hasRolled = true;
+                    gameState.isRolling = false;
+                    document.getElementById('dice-roller').textContent = finalRoll;
+                    document.getElementById('roll-button').disabled = false;
+                    
+                    const movable = checkMovableTokens();
+                    gameState.movableTokens = movable;
+                    
+                    if (movable.length > 0) {
+                        updateMessage(`Dice: ${finalRoll}! Select a token to move.`, 'move');
+                        renderBoard(); // Highlight movable tokens
+                    } else {
+                        updateMessage(`Dice: ${finalRoll}! No moves possible.`, 'error');
+                        
+                        // No move possible, turn must switch unless a 6 was rolled
+                        setTimeout(() => {
+                            if (finalRoll !== 6) {
+                                switchPlayerTurn();
+                                updateMessage(`${getPlayerObject(gameState.playerTurn).name}'s turn. Roll the dice.`, 'turn');
+                            } else {
+                                updateMessage(`Rolled a 6, but no token can move. Roll again.`, 'turn');
+                            }
+                            
+                            gameState.diceValue = 0;
+                            gameState.hasRolled = false;
+                            renderBoard(); // Clear highlights
+                        }, 1500);
+                    }
+                }
+            }, 100);
+        }
+
+        // -----------------------------------------------------
+        // 5. RENDERING & UI
+        // -----------------------------------------------------
+
+        function updateMessage(msg, type) {
+            const msgElement = document.getElementById('status-message');
+            msgElement.textContent = msg;
+            
+            // Update color based on message type or current player
+            let hexColor;
+            
+            if (gameState.status !== 'Playing') {
+                 hexColor = '#dc2626'; // Red for end game
+            } else if (type === 'turn' || type === 'move' || type === 'info') {
+                hexColor = getPlayerObject(gameState.playerTurn).hex;
+            } else if (type === 'kill') {
+                hexColor = '#f59e0b'; // Amber for kills
+            } else {
+                hexColor = '#374151';
+            }
+            
+            msgElement.style.color = hexColor;
+            msgElement.parentElement.style.borderColor = hexColor; 
+            document.getElementById('dice-roller').style.borderColor = hexColor;
+            document.getElementById('dice-roller').style.color = hexColor;
+        }
+
+        function renderBoard() {
+            const boardContainer = document.querySelector('.ludo-board');
+            if (!boardContainer) return;
+
+            // 1. Preserve the center home element and clear its tokens
+            let centerHome = document.querySelector('.center-home');
+            if(centerHome) centerHome.innerHTML = 'HOME';
+            
+            // 2. Clear all dynamically added cells and tokens (Tokens are recreated in step 5)
+            document.querySelectorAll('.track-cell, .base-cell').forEach(el => el.remove());
+
+            // 3. Generate Base Areas (And their token holders)
+            const baseAreas = [
+                { color: 'RED', class: 'grid-cell-red-base', gridArea: '1 / 1 / span 6 / span 6' },
+                { color: 'BLUE', class: 'grid-cell-blue-base', gridArea: '1 / 10 / span 6 / span 6' },
+                { color: 'YELLOW', class: 'grid-cell-yellow-base', gridArea: '10 / 10 / span 6 / span 6' },
+                { color: 'GREEN', class: 'grid-cell-green-base', gridArea: '10 / 1 / span 6 / span 6' },
+            ];
+
+            baseAreas.forEach(base => {
+                const baseElement = document.createElement('div');
+                baseElement.className = `${base.class} base-cell`;
+                baseElement.style.gridArea = base.gridArea;
+
+                const homeBox = document.createElement('div');
+                homeBox.className = 'home-box';
+                homeBox.style.backgroundColor = getPlayerObject(base.color).hex; 
+
+                for (let i = 0; i < NUM_TOKENS; i++) {
+                    const holder = document.createElement('div');
+                    holder.className = 'token-holder';
+                    holder.id = `${base.color.toLowerCase()}-holder-${i}`;
+                    homeBox.appendChild(holder);
+                }
+                
+                baseElement.appendChild(homeBox);
+                boardContainer.appendChild(baseElement);
+            });
+            
+            // 4. Generate Track Cells (0-75)
+            TRACK_MAP.forEach((cell, index) => {
+                const cellElement = document.createElement('div');
+                cellElement.className = 'track-cell';
+                cellElement.id = `track-cell-${index}`;
+                cellElement.style.gridArea = cell.grid.replace('/', ' / ') + ' / ' + cell.grid.replace('/', ' / ');
+                
+                // Styling
+                if (cell.homeCol) {
+                    cellElement.classList.add(`${cell.homeCol}-home-col`);
+                    const playerHex = getPlayerObject(cell.homeCol.toUpperCase()).hex;
+                    cellElement.style.backgroundColor = playerHex; 
+                    cellElement.style.filter = 'brightness(1.5)';
+                }
+                if (cell.color && !cell.homeCol) {
+                     cellElement.style.backgroundColor = getPlayerObject(cell.color).hex;
+                }
+                if (cell.isSafe && !cell.homeCol) {
+                    cellElement.classList.add('safe-spot');
+                }
+                if (cell.isStart) {
+                    cellElement.style.borderWidth = '3px';
+                    cellElement.style.borderColor = getPlayerObject(cell.color).hex;
+                    cellElement.style.borderRadius = '5px';
+                }
+
+                boardContainer.appendChild(cellElement);
+            });
+            
+            // 5. Create and Position Tokens based on gameState
+            PLAYER_COLORS.forEach(color => {
+                const playerConfig = PLAYERS[color];
+                gameState.positions[color].forEach((pos, tokenIndex) => {
+                    let tokenElement = document.getElementById(`${color.toLowerCase()}-token-${tokenIndex}`);
+
+                    if (!tokenElement) {
+                        // Create token if it doesn't exist
+                        tokenElement = document.createElement('div');
+                        tokenElement.className = 'token';
+                        tokenElement.id = `${color.toLowerCase()}-token-${tokenIndex}`;
+                        tokenElement.style.backgroundColor = playerConfig.hex;
+                        tokenElement.setAttribute('data-color', color);
+                        tokenElement.setAttribute('data-index', tokenIndex);
+                        tokenElement.onclick = () => handleTokenMove(tokenIndex);
+                        // Append it to a temporary holder (or the first holder) until moveTokenToVisualCell places it correctly
+                        document.body.appendChild(tokenElement); 
+                    }
+                    
+                    tokenElement.classList.remove('highlight');
+                    const isMovable = gameState.movableTokens.some(m => m.tokenIndex === tokenIndex);
+                    if (isMovable && gameState.playerTurn === color) {
+                         tokenElement.classList.add('highlight');
+                    }
+                    
+                    // Move the token to the correct visual cell (this is the key step)
+                    moveTokenToVisualCell(color, tokenIndex, pos);
+                });
+            });
+
+            // 6. Re-append the center home at the end to ensure z-index is respected
+            if (centerHome) boardContainer.appendChild(centerHome);
+        }
+        
+        // -----------------------------------------------------
+        // 6. INITIALIZATION
+        // -----------------------------------------------------
+
+        function initGame() {
+            gameState = initialState();
+            renderBoard();
+            updateMessage(`Game started! ${getPlayerObject(gameState.playerTurn).name} player's turn. Roll the dice.`, 'turn');
+            
+            document.getElementById('roll-button').disabled = false;
+            document.getElementById('roll-button').onclick = handleRoll;
+            document.getElementById('new-game-button').onclick = initGame;
+            document.getElementById('new-game-button').classList.add('hidden');
+            document.getElementById('dice-roller').textContent = '?'; // Reset dice display
+        }
+
+        document.addEventListener('DOMContentLoaded', initGame);
+
+    </script>
+</body>
+</html>
